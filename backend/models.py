@@ -13,7 +13,7 @@ class User(db.Model):
     display_name = db.Column(db.String(128))
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -43,7 +43,7 @@ class Product(db.Model):
     default_quantity = db.Column(db.Float, default=1.0)
     min_stock = db.Column(db.Float, default=0.0)
     calories_per_100g = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     inventory = db.relationship('InventoryEntry', backref='product', lazy=True, cascade='all, delete-orphan')
 
@@ -73,7 +73,7 @@ class InventoryEntry(db.Model):
     quantity = db.Column(db.Float, nullable=False)
     best_before = db.Column(db.Date, nullable=True)
     location = db.Column(db.String(128))
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
         return {
@@ -98,7 +98,7 @@ class Recipe(db.Model):
     image_url = db.Column(db.String(512))
     source_url = db.Column(db.String(512))
     category = db.Column(db.String(64))  # dessert, main, salad, soup, etc.
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     ingredients = db.relationship('RecipeIngredient', backref='recipe', lazy=True, cascade='all, delete-orphan')
 
@@ -178,7 +178,7 @@ class ShoppingList(db.Model):
     unit = db.Column(db.String(32))
     checked = db.Column(db.Boolean, default=False)
     auto_added = db.Column(db.Boolean, default=False)
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at = db.Column(db.DateTime, default=datetime.now)
 
     product = db.relationship('Product', lazy=True)
 
@@ -203,7 +203,7 @@ class ActivityLog(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=True)
     quantity = db.Column(db.Float)
     details = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now)
 
     product = db.relationship('Product', lazy=True)
 
