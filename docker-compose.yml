@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: pantrypal-api
+    restart: unless-stopped
+    environment:
+      - DB_PATH=/app/data/pantrypal.db
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - OFF_COUNTRY=${OFF_COUNTRY:-ch}
+      - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-72}
+    volumes:
+      - db-data:/app/data
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - pantrypal-net
+
+  frontend:
+    build: ./frontend
+    container_name: pantrypal-ui
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - pantrypal-net
+
+volumes:
+  db-data:
+
+networks:
+  pantrypal-net:
+    driver: bridge
