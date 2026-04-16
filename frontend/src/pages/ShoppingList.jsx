@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
 import { ShoppingCart, Plus, Trash2, Check, ScanBarcode, CheckCheck, Search, Package } from 'lucide-react';
 import BarcodeScanner from '../components/BarcodeScanner';
+import ComboSelect from '../components/ComboSelect';
 
 export default function ShoppingListPage({ addToast }) {
   const [items, setItems] = useState([]);
@@ -374,7 +375,12 @@ export default function ShoppingListPage({ addToast }) {
                 </div>
                 <div className="form-group">
                   <label>Unit</label>
-                  <input placeholder="pcs, kg, L..." value={addForm.unit} onChange={e => setAddForm({ ...addForm, unit: e.target.value })} />
+                  <ComboSelect
+                    value={addForm.unit}
+                    onChange={v => setAddForm({ ...addForm, unit: v })}
+                    options={['pcs', 'pack', 'g', 'kg', 'ml', 'l', 'bottle', 'box', 'can']}
+                    placeholder="Unit..."
+                  />
                 </div>
               </div>
               {addForm.product_id && (

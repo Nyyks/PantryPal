@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
 import { Package, Plus, Minus, Search, ScanBarcode, X, Edit, Trash2, ChevronDown, ChevronRight, MapPin, Globe } from 'lucide-react';
 import BarcodeScanner from '../components/BarcodeScanner';
+import ComboSelect from '../components/ComboSelect';
 
 const UNITS = [
   { v: 'pcs', l: 'Pieces' },
@@ -500,8 +501,12 @@ export default function Inventory({ addToast }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Category</label>
-                  <input list="cat-suggestions" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} />
-                  <datalist id="cat-suggestions">{categories.map(c => <option key={c} value={c} />)}</datalist>
+                  <ComboSelect
+                    value={newProduct.category}
+                    onChange={v => setNewProduct({ ...newProduct, category: v })}
+                    options={categories}
+                    placeholder="Select or type category..."
+                  />
                 </div>
                 <div className="form-group">
                   <label>Unit</label>
@@ -552,7 +557,12 @@ export default function Inventory({ addToast }) {
               <div className="form-row">
                 <div className="form-group">
                   <label>Category</label>
-                  <input list="cat-suggestions" value={editProduct.category || ''} onChange={e => setEditProduct({ ...editProduct, category: e.target.value })} />
+                  <ComboSelect
+                    value={editProduct.category || ''}
+                    onChange={v => setEditProduct({ ...editProduct, category: v })}
+                    options={categories}
+                    placeholder="Select or type category..."
+                  />
                 </div>
                 <div className="form-group">
                   <label>Unit</label>
@@ -597,10 +607,12 @@ export default function Inventory({ addToast }) {
               </div>
               <div className="form-group">
                 <label>Storage Location</label>
-                <input value={editEntry.location || ''}
-                  onChange={e => setEditEntry({ ...editEntry, location: e.target.value })}
-                  placeholder="e.g. Fridge, Pantry, Freezer..." list="location-suggestions" />
-                <datalist id="location-suggestions">{locations.map(l => <option key={l} value={l} />)}</datalist>
+                <ComboSelect
+                  value={editEntry.location || ''}
+                  onChange={v => setEditEntry({ ...editEntry, location: v })}
+                  options={[...new Set([...locations])]}
+                  placeholder="Select or type location..."
+                />
               </div>
               <div className="form-group">
                 <label>Best Before</label>

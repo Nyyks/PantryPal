@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { BookOpen, Plus, Clock, Users, ExternalLink, Trash2, X, Link, ChevronLeft, Edit, ShoppingCart } from 'lucide-react';
+import ComboSelect from '../components/ComboSelect';
 
 export default function Recipes({ addToast }) {
   const [recipes, setRecipes] = useState([]);
@@ -241,19 +242,12 @@ export default function Recipes({ addToast }) {
             </div>
             <div className="form-group">
               <label>Category</label>
-              <input list="recipe-cats" placeholder="e.g. dessert, main, soup"
-                value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} />
-              <datalist id="recipe-cats">
-                {categories.map(c => <option key={c} value={c} />)}
-                <option value="breakfast" />
-                <option value="main" />
-                <option value="dessert" />
-                <option value="salad" />
-                <option value="soup" />
-                <option value="snack" />
-                <option value="side" />
-                <option value="drink" />
-              </datalist>
+              <ComboSelect
+                value={form.category}
+                onChange={v => setForm({ ...form, category: v })}
+                options={[...new Set(['breakfast', 'main', 'dessert', 'salad', 'soup', 'snack', 'side', 'drink', ...categories])]}
+                placeholder="Select or type category..."
+              />
             </div>
           </div>
           <div className="form-group">
