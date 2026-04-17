@@ -5,7 +5,7 @@ from functools import wraps
 from datetime import datetime, date, timedelta
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
-from models import db, User, Product, InventoryEntry, Recipe, RecipeIngredient, MealPlan, ShoppingList, ActivityLog
+from models import db, User, Product, ProductBarcode, InventoryEntry, Recipe, RecipeIngredient, MealPlan, ShoppingList, ActivityLog
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -58,6 +58,21 @@ def run_migrations():
 with app.app_context():
     db.create_all()
     run_migrations()
+
+    # Migrate legacy barcodes into product_barcodes table
+    products_with_barcodes = Product.query.filter(
+        Product.barcode.isnot(None), Product.barcode != ''
+    ).all()
+    migrated = 0
+    for p in products_with_barcodes:
+        existing = ProductBarcode.query.filter_by(product_id=p.id, barcode=p.barcode).first()
+        if not existing:
+            db.session.add(ProductBarcode(product_id=p.id, barcode=p.barcode))
+            migrated += 1
+    if migrated:
+        db.session.commit()
+        print(f"Migration: copied {migrated} legacy barcodes to product_barcodes table")
+
     if User.query.count() == 0:
         admin = User(username='admin', display_name='Admin', is_admin=True)
         admin.set_password('admin')
@@ -255,17 +270,25 @@ def normalize_barcode(barcode):
 
 
 def find_product_by_barcode(barcode):
+    """Search for a product by barcode in both legacy field and barcodes table."""
     bc = normalize_barcode(barcode)
-    p = Product.query.filter_by(barcode=bc).first()
-    if p: return p
-    p = Product.query.filter_by(barcode=barcode).first()
-    if p: return p
+    raw = barcode.strip()
     stripped = barcode.lstrip('0')
-    if stripped:
-        p = Product.query.filter(
-            (Product.barcode == stripped) | (Product.barcode == stripped.zfill(13))
-        ).first()
-    return p
+    variants = list({v for v in [bc, raw, stripped, stripped.zfill(13) if stripped else None] if v})
+
+    # Search legacy Product.barcode field
+    for v in variants:
+        p = Product.query.filter_by(barcode=v).first()
+        if p:
+            return p
+
+    # Search product_barcodes table
+    for v in variants:
+        pb = ProductBarcode.query.filter_by(barcode=v).first()
+        if pb:
+            return pb.product
+
+    return None
 
 
 def _parse_off_product(p, barcode=None):
@@ -433,6 +456,65 @@ def off_search():
     return jsonify(results)
 
 
+# ─── Product Barcodes ───
+
+@app.route('/api/products/<int:pid>/barcodes', methods=['GET'])
+@auth_required
+def get_product_barcodes(pid):
+    product = Product.query.get_or_404(pid)
+    return jsonify(product.all_barcodes())
+
+
+@app.route('/api/products/<int:pid>/barcodes', methods=['POST'])
+@auth_required
+def add_product_barcode(pid):
+    product = Product.query.get_or_404(pid)
+    data = request.get_json(silent=True)
+    if not data or not data.get('barcode'):
+        return jsonify({'error': 'Barcode is required'}), 400
+    bc = normalize_barcode(data['barcode'])
+    label = data.get('label', '').strip() or None
+
+    # Check if barcode is already used by another product
+    existing = find_product_by_barcode(bc)
+    if existing and existing.id != pid:
+        return jsonify({'error': f'Barcode {bc} is already assigned to "{existing.name}"'}), 409
+
+    # Check if already on this product
+    if bc in product.all_barcodes():
+        return jsonify({'error': 'Barcode already assigned to this product'}), 409
+
+    pb = ProductBarcode(product_id=pid, barcode=bc, label=label)
+    db.session.add(pb)
+
+    # If product has no primary barcode, set it
+    if not product.barcode:
+        product.barcode = bc
+
+    db.session.commit()
+    return jsonify(pb.to_dict()), 201
+
+
+@app.route('/api/products/<int:pid>/barcodes/<barcode>', methods=['DELETE'])
+@auth_required
+def remove_product_barcode(pid, barcode):
+    product = Product.query.get_or_404(pid)
+    bc = normalize_barcode(barcode)
+
+    # Remove from barcodes table
+    pb = ProductBarcode.query.filter_by(product_id=pid, barcode=bc).first()
+    if pb:
+        db.session.delete(pb)
+
+    # If it was the legacy barcode, clear it (or set to another barcode)
+    if product.barcode == bc:
+        remaining = ProductBarcode.query.filter_by(product_id=pid).filter(ProductBarcode.barcode != bc).first()
+        product.barcode = remaining.barcode if remaining else None
+
+    db.session.commit()
+    return jsonify({'barcodes': product.all_barcodes()})
+
+
 # ─── Inventory ───
 
 @app.route('/api/inventory', methods=['GET'])
@@ -482,6 +564,15 @@ def add_to_inventory():
                 }), 404
     if not product:
         return jsonify({'error': 'Product not found. Create it first or scan a known barcode.'}), 404
+
+    # Auto-inherit location from most recent entry for this product
+    if not location:
+        last_entry = InventoryEntry.query.filter_by(product_id=product.id).filter(
+            InventoryEntry.location.isnot(None), InventoryEntry.location != ''
+        ).order_by(InventoryEntry.added_at.desc()).first()
+        if last_entry:
+            location = last_entry.location
+
     entry = InventoryEntry(
         product_id=product.id, quantity=quantity,
         best_before=date.fromisoformat(best_before) if best_before else None,

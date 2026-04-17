@@ -3,6 +3,7 @@ import { api } from '../utils/api';
 import { Package, Plus, Minus, Search, ScanBarcode, X, Edit, Trash2, ChevronDown, ChevronRight, MapPin, Globe } from 'lucide-react';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ComboSelect from '../components/ComboSelect';
+import BarcodeManager from '../components/BarcodeManager';
 
 const UNITS = [
   { v: 'pcs', l: 'Pieces' },
@@ -96,6 +97,33 @@ export default function Inventory({ addToast }) {
     setShowAddForm(true);
     setScanResult(null);
   };
+
+  // Link unknown barcode to existing product
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [linkBarcode, setLinkBarcode] = useState('');
+  const [linkSearch, setLinkSearch] = useState('');
+
+  const handleLinkFromScan = () => {
+    if (!scanResult?.barcode) return;
+    setLinkBarcode(scanResult.barcode);
+    setLinkSearch('');
+    setShowLinkPicker(true);
+  };
+
+  const handleLinkToProduct = async (product) => {
+    try {
+      await api.addProductBarcode(product.id, linkBarcode);
+      await api.addToInventory({ product_id: product.id, quantity: 1 });
+      addToast(`Barcode linked to ${product.name} and added to inventory`, 'success');
+      setShowLinkPicker(false);
+      setScanResult(null);
+      loadInventory();
+    } catch (err) { addToast(err.message, 'error'); }
+  };
+
+  const linkFilteredProducts = allProducts.filter(p =>
+    linkSearch.length >= 1 && p.name.toLowerCase().includes(linkSearch.toLowerCase())
+  );
 
   const handleManualAdd = async (productId, qty = 1) => {
     try {
@@ -265,9 +293,12 @@ export default function Inventory({ addToast }) {
                   </div>
                 )}
                 {scanResult.type === 'missing' && (
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 10px' }} onClick={handleCreateFromScan}>
-                      <Plus size={12} /> Create product for this barcode
+                      <Plus size={12} /> Create new product
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }} onClick={handleLinkFromScan}>
+                      <ScanBarcode size={12} /> Link to existing product
                     </button>
                   </div>
                 )}
@@ -537,22 +568,16 @@ export default function Inventory({ addToast }) {
       {/* Edit Product Modal */}
       {editProduct && (
         <div className="modal-overlay" onClick={() => setEditProduct(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: '90vh' }}>
             <h3>Edit Product</h3>
             <form onSubmit={handleUpdateProduct}>
               <div className="form-group">
                 <label>Name *</label>
                 <input required value={editProduct.name} onChange={e => setEditProduct({ ...editProduct, name: e.target.value })} />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Barcode</label>
-                  <input value={editProduct.barcode || ''} onChange={e => setEditProduct({ ...editProduct, barcode: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Brand</label>
-                  <input value={editProduct.brand || ''} onChange={e => setEditProduct({ ...editProduct, brand: e.target.value })} />
-                </div>
+              <div className="form-group">
+                <label>Brand</label>
+                <input value={editProduct.brand || ''} onChange={e => setEditProduct({ ...editProduct, brand: e.target.value })} />
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -585,6 +610,10 @@ export default function Inventory({ addToast }) {
                 <label>Image URL</label>
                 <input value={editProduct.image_url || ''} onChange={e => setEditProduct({ ...editProduct, image_url: e.target.value })} />
               </div>
+
+              {/* Multi-barcode management */}
+              <BarcodeManager productId={editProduct.id} barcodes={editProduct.barcodes || []} addToast={addToast} onUpdate={(barcodes) => setEditProduct({ ...editProduct, barcodes })} />
+
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setEditProduct(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save Changes</button>
@@ -610,7 +639,7 @@ export default function Inventory({ addToast }) {
                 <ComboSelect
                   value={editEntry.location || ''}
                   onChange={v => setEditEntry({ ...editEntry, location: v })}
-                  options={[...new Set([...locations])]}
+                  options={[...new Set(['Fridge', 'Freezer', 'Pantry', 'Cupboard', 'Counter', 'Cellar', ...locations])]}
                   placeholder="Select or type location..."
                 />
               </div>
@@ -624,6 +653,61 @@ export default function Inventory({ addToast }) {
                 <button type="submit" className="btn btn-primary">Save</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Link barcode to existing product */}
+      {showLinkPicker && (
+        <div className="modal-overlay" onClick={() => setShowLinkPicker(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <h3>Link barcode to existing product</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Barcode <span style={{ fontFamily: 'var(--font-mono)' }}>{linkBarcode}</span> will be added to the product you select.
+            </p>
+            <div className="form-group">
+              <input
+                autoFocus
+                placeholder="Search products by name..."
+                value={linkSearch}
+                onChange={e => setLinkSearch(e.target.value)}
+              />
+            </div>
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {linkFilteredProducts.length === 0 && linkSearch.length >= 1 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>No products found.</p>
+              )}
+              {linkFilteredProducts.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                  borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                }}
+                  onClick={() => handleLinkToProduct(p)}
+                  onMouseOver={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {p.image_url ? (
+                    <img src={p.image_url} className="product-img-sm" alt="" />
+                  ) : (
+                    <div className="product-img-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Package size={12} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                    {p.brand && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.brand}</div>}
+                    {p.barcodes?.length > 0 && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        {p.barcodes.length} barcode{p.barcodes.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowLinkPicker(false)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}

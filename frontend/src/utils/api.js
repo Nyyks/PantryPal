@@ -110,6 +110,11 @@ export const api = {
   // Barcode
   lookupBarcode: (barcode) => apiFetch(`/barcode/${barcode}`),
 
+  // Product Barcodes
+  getProductBarcodes: (productId) => apiFetch(`/products/${productId}/barcodes`),
+  addProductBarcode: (productId, barcode, label) => apiFetch(`/products/${productId}/barcodes`, { method: 'POST', body: JSON.stringify({ barcode, label }) }),
+  removeProductBarcode: (productId, barcode) => apiFetch(`/products/${productId}/barcodes/${encodeURIComponent(barcode)}`, { method: 'DELETE' }),
+
   // Inventory
   getInventory: () => apiFetch('/inventory'),
   addToInventory: (data) => apiFetch('/inventory/add', { method: 'POST', body: JSON.stringify(data) }),

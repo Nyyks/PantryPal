@@ -34,24 +34,33 @@ class User(db.Model):
 class Product(db.Model):
     __tablename__ = 'products'
     id = db.Column(db.Integer, primary_key=True)
-    barcode = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    barcode = db.Column(db.String(64), nullable=True, index=True)  # Legacy primary barcode
     name = db.Column(db.String(256), nullable=False)
     brand = db.Column(db.String(256))
     image_url = db.Column(db.String(512))
     category = db.Column(db.String(128))
-    quantity_unit = db.Column(db.String(32), default='pcs')  # pcs, g, ml, kg, l
+    quantity_unit = db.Column(db.String(32), default='pcs')
     default_quantity = db.Column(db.Float, default=1.0)
     min_stock = db.Column(db.Float, default=0.0)
     calories_per_100g = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     inventory = db.relationship('InventoryEntry', backref='product', lazy=True, cascade='all, delete-orphan')
+    barcodes = db.relationship('ProductBarcode', backref='product', lazy=True, cascade='all, delete-orphan')
+
+    def all_barcodes(self):
+        """Return all barcodes: legacy field + barcodes table."""
+        codes = [b.barcode for b in self.barcodes]
+        if self.barcode and self.barcode not in codes:
+            codes.insert(0, self.barcode)
+        return codes
 
     def to_dict(self):
         stock = sum(e.quantity for e in self.inventory if e.quantity > 0)
         return {
             'id': self.id,
             'barcode': self.barcode,
+            'barcodes': self.all_barcodes(),
             'name': self.name,
             'brand': self.brand,
             'image_url': self.image_url,
@@ -62,6 +71,24 @@ class Product(db.Model):
             'calories_per_100g': self.calories_per_100g,
             'stock': stock,
             'below_min': stock < self.min_stock if self.min_stock else False,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ProductBarcode(db.Model):
+    __tablename__ = 'product_barcodes'
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    barcode = db.Column(db.String(64), nullable=False, index=True)
+    label = db.Column(db.String(128))  # optional label like "Migros Bio Milk 1L"
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'product_id': self.product_id,
+            'barcode': self.barcode,
+            'label': self.label,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
