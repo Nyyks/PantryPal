@@ -639,7 +639,7 @@ export default function Inventory({ addToast }) {
                 <ComboSelect
                   value={editEntry.location || ''}
                   onChange={v => setEditEntry({ ...editEntry, location: v })}
-                  options={[...new Set(['Fridge', 'Freezer', 'Pantry', 'Cupboard', 'Counter', 'Cellar', ...locations])]}
+                  options={[...new Set([...locations])]}
                   placeholder="Select or type location..."
                 />
               </div>
