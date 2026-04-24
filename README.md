@@ -1,6 +1,10 @@
 # PantryPal — Self-Hosted Home Inventory ERP
 
-A Grocy-inspired home inventory management system with barcode scanning, recipe management, meal planning, and automatic shopping lists.
+## DISCLAIMER
+This thing was thrown togheter in like 4h
+The base code was "coded" by AI and then painstakingly fixxed by me
+
+However, even if this vibecoded AI-Slop, it works as expected and i atleast find it very usefull
 
 ## Features
 
