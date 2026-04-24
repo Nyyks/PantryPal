@@ -88,6 +88,8 @@ export const api = {
   login: (username, password) => apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   getMe: () => apiFetch('/auth/me'),
   changePassword: (current_password, new_password) => apiFetch('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }),
+  getPreferences: () => apiFetch('/auth/preferences'),
+  updatePreferences: (prefs) => apiFetch('/auth/preferences', { method: 'PUT', body: JSON.stringify(prefs) }),
 
   // Users (admin)
   getUsers: () => apiFetch('/users'),
@@ -105,6 +107,7 @@ export const api = {
   createProduct: (data) => apiFetch('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (id, data) => apiFetch(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (id) => apiFetch(`/products/${id}`, { method: 'DELETE' }),
+  mergeProducts: (sourceId, targetId) => apiFetch(`/products/${sourceId}/merge/${targetId}`, { method: 'POST' }),
   getCategories: () => apiFetch('/products/categories'),
 
   // Barcode

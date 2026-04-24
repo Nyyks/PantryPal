@@ -3,8 +3,10 @@ import { api } from '../utils/api';
 import { ShoppingCart, Plus, Trash2, Check, ScanBarcode, CheckCheck, Search, Package } from 'lucide-react';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ComboSelect from '../components/ComboSelect';
+import { usePrefs } from '../hooks/usePrefs';
 
 export default function ShoppingListPage({ addToast }) {
+  const { prefs } = usePrefs();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [shoppingMode, setShoppingMode] = useState(false);
@@ -45,7 +47,7 @@ export default function ShoppingListPage({ addToast }) {
       await api.updateShoppingItem(item.id, { checked: newChecked });
       setItems(items.map(i => i.id === item.id ? { ...i, checked: newChecked } : i));
 
-      if (newChecked) {
+      if (newChecked && prefs.auto_add_to_inventory) {
         try {
           if (item.product_id) {
             // Linked to an existing product — just add to inventory

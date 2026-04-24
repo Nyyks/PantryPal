@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
-import { Package, Plus, Minus, Search, ScanBarcode, X, Edit, Trash2, ChevronDown, ChevronRight, MapPin, Globe } from 'lucide-react';
+import { Package, Plus, Minus, Search, ScanBarcode, X, Edit, Trash2, ChevronDown, ChevronRight, MapPin, Globe, Merge } from 'lucide-react';
 import BarcodeScanner from '../components/BarcodeScanner';
 import ComboSelect from '../components/ComboSelect';
 import BarcodeManager from '../components/BarcodeManager';
+import { usePrefs } from '../hooks/usePrefs';
 
 const UNITS = [
   { v: 'pcs', l: 'Pieces' },
@@ -20,6 +21,7 @@ const UNITS = [
 const EMPTY_PRODUCT = { name: '', barcode: '', brand: '', category: '', image_url: '', quantity_unit: 'pcs', min_stock: 0, default_quantity: 1 };
 
 export default function Inventory({ addToast }) {
+  const { prefs } = usePrefs();
   const [inventory, setInventory] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -124,6 +126,28 @@ export default function Inventory({ addToast }) {
   const linkFilteredProducts = allProducts.filter(p =>
     linkSearch.length >= 1 && p.name.toLowerCase().includes(linkSearch.toLowerCase())
   );
+
+  // Merge product state
+  const [showMerge, setShowMerge] = useState(null); // source product
+  const [mergeSearch, setMergeSearch] = useState('');
+
+  const mergeFilteredProducts = allProducts.filter(p =>
+    mergeSearch.length >= 1 &&
+    p.name.toLowerCase().includes(mergeSearch.toLowerCase()) &&
+    p.id !== showMerge?.id
+  );
+
+  const handleMerge = async (target) => {
+    if (!showMerge) return;
+    if (!confirm(`Merge "${showMerge.name}" into "${target.name}"?\n\nAll barcodes, inventory entries, and references will be moved to "${target.name}". "${showMerge.name}" will be deleted.\n\nThis cannot be undone.`)) return;
+    try {
+      const result = await api.mergeProducts(showMerge.id, target.id);
+      addToast(result.message, 'success');
+      setShowMerge(null);
+      setMergeSearch('');
+      loadInventory();
+    } catch (err) { addToast(err.message, 'error'); }
+  };
 
   const handleManualAdd = async (productId, qty = 1) => {
     try {
@@ -405,6 +429,7 @@ export default function Inventory({ addToast }) {
                             <button className="btn-icon" title="Use 1" onClick={() => handleManualConsume(item.product.id)}><Minus size={14} /></button>
                           )}
                           <button className="btn-icon" title="Edit product" onClick={() => setEditProduct({ ...item.product })}><Edit size={14} /></button>
+                          <button className="btn-icon" title="Merge into another product" onClick={() => { setShowMerge(item.product); setMergeSearch(''); }}><Merge size={14} /></button>
                           {item.product.stock === 0 && (
                             <button className="btn-icon" title="Delete product" style={{ color: 'var(--red)' }} onClick={() => handleDeleteProduct(item.product.id)}><Trash2 size={14} /></button>
                           )}
@@ -653,6 +678,65 @@ export default function Inventory({ addToast }) {
                 <button type="submit" className="btn btn-primary">Save</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Merge product into another */}
+      {showMerge && (
+        <div className="modal-overlay" onClick={() => setShowMerge(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <h3>Merge product</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+              Merge <strong>{showMerge.name}</strong> into another product.
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
+              All barcodes, inventory entries, and references will be moved to the target. The source product will be deleted.
+            </p>
+            <div className="form-group">
+              <input
+                autoFocus
+                placeholder="Search target product..."
+                value={mergeSearch}
+                onChange={e => setMergeSearch(e.target.value)}
+              />
+            </div>
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {mergeFilteredProducts.length === 0 && mergeSearch.length >= 1 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>No products found.</p>
+              )}
+              {mergeFilteredProducts.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                  borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                }}
+                  onClick={() => handleMerge(p)}
+                  onMouseOver={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {p.image_url ? (
+                    <img src={p.image_url} className="product-img-sm" alt="" />
+                  ) : (
+                    <div className="product-img-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Package size={12} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                    {p.brand && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.brand}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {p.barcodes?.length || 0} barcodes · stock: {p.stock}
+                    </div>
+                  </div>
+                  <span className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }}>
+                    <Merge size={12} /> Merge here
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowMerge(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
