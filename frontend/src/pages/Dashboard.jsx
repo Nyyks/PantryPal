@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { usePrefs } from '../hooks/usePrefs';
 import { Package, ShoppingCart, BookOpen, AlertTriangle, Clock, Utensils } from 'lucide-react';
 
 export default function Dashboard() {
+  const { prefs } = usePrefs();
   const [data, setData] = useState(null);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,64 +70,74 @@ export default function Dashboard() {
             {safe.shopping_count}
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Recipes</div>
-          <div className="stat-value">{safe.recipe_count}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Expiring Soon</div>
-          <div className="stat-value" style={{ color: safe.expiring_soon > 0 ? 'var(--red)' : undefined }}>
-            {safe.expiring_soon}
+        {prefs.show_recipes && (
+          <div className="stat-card">
+            <div className="stat-label">Recipes</div>
+            <div className="stat-value">{safe.recipe_count}</div>
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Low Stock</div>
-          <div className="stat-value" style={{ color: safe.low_stock.length > 0 ? 'var(--red)' : undefined }}>
-            {safe.low_stock.length}
+        )}
+        {prefs.show_expiring_warning && (
+          <div className="stat-card">
+            <div className="stat-label">Expiring Soon</div>
+            <div className="stat-value" style={{ color: safe.expiring_soon > 0 ? 'var(--red)' : undefined }}>
+              {safe.expiring_soon}
+            </div>
           </div>
-        </div>
+        )}
+        {prefs.show_expiring_warning && (
+          <div className="stat-card">
+            <div className="stat-label">Low Stock</div>
+            <div className="stat-value" style={{ color: safe.low_stock.length > 0 ? 'var(--red)' : undefined }}>
+              {safe.low_stock.length}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="card">
-          <h3 style={{ fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-            <Utensils size={16} /> Today's Meals
-          </h3>
-          {safe.today_meals.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No meals planned for today.</p>
-          ) : (
-            safe.today_meals.map(m => (
-              <div key={m.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className={`meal-type-tag ${m.meal_type}`}>{m.meal_type}</span>
-                <span style={{ fontSize: 13 }}>{m.recipe?.name || m.custom_meal}</span>
-              </div>
-            ))
-          )}
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: prefs.show_meal_planner && prefs.show_dashboard_activity ? '1fr 1fr' : '1fr', gap: 16 }}>
+        {prefs.show_meal_planner && (
+          <div className="card">
+            <h3 style={{ fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+              <Utensils size={16} /> Today's Meals
+            </h3>
+            {safe.today_meals.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No meals planned for today.</p>
+            ) : (
+              safe.today_meals.map(m => (
+                <div key={m.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className={`meal-type-tag ${m.meal_type}`}>{m.meal_type}</span>
+                  <span style={{ fontSize: 13 }}>{m.recipe?.name || m.custom_meal}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
-        <div className="card">
-          <h3 style={{ fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-            <Clock size={16} /> Recent Activity
-          </h3>
-          {activity.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No recent activity.</p>
-          ) : (
-            activity.map(a => (
-              <div key={a.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                <span>
-                  <span className={`tag ${a.action === 'add' ? 'tag-green' : a.action === 'consume' ? 'tag-orange' : 'tag-accent'}`}>{a.action}</span>
-                  {' '}{a.product_name}
-                </span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                  {new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
+        {prefs.show_dashboard_activity && (
+          <div className="card">
+            <h3 style={{ fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+              <Clock size={16} /> Recent Activity
+            </h3>
+            {activity.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No recent activity.</p>
+            ) : (
+              activity.map(a => (
+                <div key={a.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                  <span>
+                    <span className={`tag ${a.action === 'add' ? 'tag-green' : a.action === 'consume' ? 'tag-orange' : 'tag-accent'}`}>{a.action}</span>
+                    {' '}{a.product_name}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                    {new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
-      {safe.low_stock.length > 0 && (
+      {prefs.show_expiring_warning && safe.low_stock.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3 style={{ fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red)' }}>
             <AlertTriangle size={16} /> Low Stock Items

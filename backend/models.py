@@ -13,7 +13,20 @@ class User(db.Model):
     display_name = db.Column(db.String(128))
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    preferences = db.Column(db.Text, default='{}')  # JSON string
     created_at = db.Column(db.DateTime, default=datetime.now)
+
+    DEFAULT_PREFS = {
+        'auto_add_to_inventory': True,
+        'auto_add_to_shopping': True,
+        'show_meal_planner': True,
+        'show_recipes': True,
+        'show_dashboard_activity': True,
+        'show_expiring_warning': True,
+        'show_calories': False,
+        'show_brand': True,
+        'default_location': '',
+    }
 
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -21,12 +34,23 @@ class User(db.Model):
     def check_password(self, password):
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
+    def get_prefs(self):
+        try:
+            stored = json.loads(self.preferences or '{}')
+        except Exception:
+            stored = {}
+        return {**self.DEFAULT_PREFS, **stored}
+
+    def set_prefs(self, prefs):
+        self.preferences = json.dumps(prefs)
+
     def to_dict(self):
         return {
             'id': self.id,
             'username': self.username,
             'display_name': self.display_name,
             'is_admin': self.is_admin,
+            'preferences': self.get_prefs(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 

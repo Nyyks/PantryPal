@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Package, BookOpen, CalendarDays, ShoppingCart, Menu, Settings as SettingsIcon, LogOut, User } from 'lucide-react';
 import { useToast } from './hooks/useToast';
+import { PrefsProvider, usePrefs } from './hooks/usePrefs';
 import { getStoredUser, setToken, setStoredUser } from './utils/api';
 import ToastContainer from './components/ToastContainer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -14,6 +15,8 @@ import ShoppingListPage from './pages/ShoppingList';
 import Settings from './pages/Settings';
 
 function Sidebar({ open, onClose, currentUser, onLogout }) {
+  const { prefs } = usePrefs();
+
   return (
     <>
       {open && <div className="mobile-overlay" onClick={onClose} />}
@@ -31,13 +34,19 @@ function Sidebar({ open, onClose, currentUser, onLogout }) {
             <Package /> Inventory
           </NavLink>
 
-          <div className="sidebar-section">Cooking</div>
-          <NavLink to="/recipes" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <BookOpen /> Recipes
-          </NavLink>
-          <NavLink to="/meal-planner" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <CalendarDays /> Meal Planner
-          </NavLink>
+          {(prefs.show_recipes || prefs.show_meal_planner) && (
+            <div className="sidebar-section">Cooking</div>
+          )}
+          {prefs.show_recipes && (
+            <NavLink to="/recipes" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+              <BookOpen /> Recipes
+            </NavLink>
+          )}
+          {prefs.show_meal_planner && (
+            <NavLink to="/meal-planner" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+              <CalendarDays /> Meal Planner
+            </NavLink>
+          )}
 
           <div className="sidebar-section">Shopping</div>
           <NavLink to="/shopping" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
@@ -93,6 +102,7 @@ function MobileHeader({ onToggle }) {
 function AppShell({ currentUser, onLogout, addToast }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { prefs } = usePrefs();
 
   return (
     <div className="app-layout">
@@ -108,8 +118,8 @@ function AppShell({ currentUser, onLogout, addToast }) {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/inventory" element={<Inventory addToast={addToast} />} />
-            <Route path="/recipes" element={<Recipes addToast={addToast} />} />
-            <Route path="/meal-planner" element={<MealPlanner addToast={addToast} />} />
+            {prefs.show_recipes && <Route path="/recipes" element={<Recipes addToast={addToast} />} />}
+            {prefs.show_meal_planner && <Route path="/meal-planner" element={<MealPlanner addToast={addToast} />} />}
             <Route path="/shopping" element={<ShoppingListPage addToast={addToast} />} />
             <Route path="/settings" element={<Settings addToast={addToast} currentUser={currentUser} />} />
           </Routes>
@@ -123,14 +133,16 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
   const { toasts, addToast } = useToast();
 
-  // Listen for forced logout (expired token)
   useEffect(() => {
     const handler = () => setCurrentUser(null);
     window.addEventListener('pantrypal_logout', handler);
     return () => window.removeEventListener('pantrypal_logout', handler);
   }, []);
 
-  const handleLogin = (user) => setCurrentUser(user);
+  const handleLogin = (user) => {
+    setStoredUser(user);
+    setCurrentUser(user);
+  };
 
   const handleLogout = () => {
     setToken(null);
@@ -144,8 +156,10 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AppShell currentUser={currentUser} onLogout={handleLogout} addToast={addToast} />
-      <ToastContainer toasts={toasts} />
+      <PrefsProvider user={currentUser}>
+        <AppShell currentUser={currentUser} onLogout={handleLogout} addToast={addToast} />
+        <ToastContainer toasts={toasts} />
+      </PrefsProvider>
     </BrowserRouter>
   );
 }

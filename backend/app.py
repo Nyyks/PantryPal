@@ -39,6 +39,9 @@ def run_migrations():
         'inventory': [
             ('location', 'VARCHAR(128)'),
         ],
+        'users': [
+            ('preferences', 'TEXT DEFAULT "{}"'),
+        ],
     }
 
     for table, columns in migrations.items():
@@ -217,6 +220,28 @@ def change_password():
     return jsonify({'message': 'Password changed successfully'})
 
 
+@app.route('/api/auth/preferences', methods=['GET'])
+@auth_required
+def get_preferences():
+    return jsonify({'preferences': g.current_user.get_prefs()})
+
+
+@app.route('/api/auth/preferences', methods=['PUT'])
+@auth_required
+def update_preferences():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Invalid request body'}), 400
+    current = g.current_user.get_prefs()
+    # Only update known keys
+    for key in User.DEFAULT_PREFS:
+        if key in data:
+            current[key] = data[key]
+    g.current_user.set_prefs(current)
+    db.session.commit()
+    return jsonify({'preferences': current})
+
+
 # ─── User Management (admin only) ───
 
 @app.route('/api/users', methods=['GET'])
@@ -345,6 +370,12 @@ def search_openfoodfacts(query, page=1):
 
 
 def check_and_auto_add_to_shopping(product):
+    # Check user preference
+    try:
+        if not g.current_user.get_prefs().get('auto_add_to_shopping', True):
+            return False
+    except Exception:
+        pass
     if product.min_stock and product.min_stock > 0:
         stock = sum(e.quantity for e in product.inventory if e.quantity > 0)
         if stock < product.min_stock:
@@ -430,6 +461,54 @@ def delete_product(pid):
 def get_categories():
     cats = db.session.query(Product.category).distinct().filter(Product.category.isnot(None), Product.category != '').all()
     return jsonify([c[0] for c in cats])
+
+
+@app.route('/api/products/<int:source_id>/merge/<int:target_id>', methods=['POST'])
+@auth_required
+def merge_products(source_id, target_id):
+    """Merge source product into target: moves barcodes, inventory, shopping list refs, then deletes source."""
+    if source_id == target_id:
+        return jsonify({'error': 'Cannot merge a product into itself'}), 400
+
+    source = Product.query.get_or_404(source_id)
+    target = Product.query.get_or_404(target_id)
+
+    # Move all barcodes from source to target
+    existing_target_bcs = set(target.all_barcodes())
+    for pb in source.barcodes:
+        if pb.barcode not in existing_target_bcs:
+            pb.product_id = target.id
+        else:
+            db.session.delete(pb)
+    # Also move legacy barcode
+    if source.barcode and source.barcode not in existing_target_bcs:
+        db.session.add(ProductBarcode(product_id=target.id, barcode=source.barcode, label=f'From {source.name}'))
+
+    # Move all inventory entries
+    for entry in source.inventory:
+        entry.product_id = target.id
+
+    # Update shopping list references
+    ShoppingList.query.filter_by(product_id=source.id).update({'product_id': target.id})
+
+    # Update activity log references
+    ActivityLog.query.filter_by(product_id=source.id).update({'product_id': target.id})
+
+    # Update recipe ingredient references
+    RecipeIngredient.query.filter_by(product_id=source.id).update({'product_id': target.id})
+
+    # Log the merge
+    log = ActivityLog(action='merge', product_id=target.id, quantity=0,
+                      details=f'Merged "{source.name}" into "{target.name}"')
+    db.session.add(log)
+
+    # Delete source (barcodes already moved/deleted, inventory moved, cascade won't destroy them)
+    source.barcodes = []  # prevent cascade delete
+    source.inventory = []
+    db.session.delete(source)
+    db.session.commit()
+
+    return jsonify({'message': f'Merged "{source.name}" into "{target.name}"', 'product': target.to_dict()})
 
 
 # ─── Barcode ───
